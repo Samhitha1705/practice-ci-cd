@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_CREDENTIALS = 'dockerhub-cred-id'
+        DOCKERHUB_CREDENTIALS = 'dockerhub-cred-id' // Jenkins stored credentials
         DOCKER_IMAGE = "vedasamhitha17/flask-ci-cd-demo"
     }
 
@@ -18,17 +18,21 @@ pipeline {
             steps {
                 bat 'python -m pip install --upgrade pip'
                 bat 'pip install -r requirements.txt'
-                bat 'pytest'
+                bat 'python -m pytest'
             }
         }
 
         stage('Docker Build & Push') {
             steps {
                 script {
-                    docker.withRegistry('https://index.docker.io/v1/', "${DOCKERHUB_CREDENTIALS}") {
-                        def app = docker.build("${DOCKER_IMAGE}:${BUILD_NUMBER}")
-                        app.push()
-                        app.push("latest")
+                    withCredentials([usernamePassword(credentialsId: "${DOCKERHUB_CREDENTIALS}", 
+                                                      usernameVariable: 'DOCKER_USER', 
+                                                      passwordVariable: 'DOCKER_PASS')]) {
+                        bat 'docker build -t %DOCKER_USER%/flask-ci-cd-demo:%BUILD_NUMBER% .'
+                        bat 'docker tag %DOCKER_USER%/flask-ci-cd-demo:%BUILD_NUMBER% %DOCKER_USER%/flask-ci-cd-demo:latest'
+                        bat 'docker login -u %DOCKER_USER% -p %DOCKER_PASS%'
+                        bat 'docker push %DOCKER_USER%/flask-ci-cd-demo:%BUILD_NUMBER%'
+                        bat 'docker push %DOCKER_USER%/flask-ci-cd-demo:latest'
                     }
                 }
             }
@@ -40,7 +44,7 @@ pipeline {
             echo 'Build, Test, and Docker Push Successful!'
         }
         failure {
-            echo 'Build Failed! Check logs.'
+            echo 'Build Failed! Check logs.....'
         }
     }
 }
